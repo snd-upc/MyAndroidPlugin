@@ -1,0 +1,21 @@
+apply plugin: 'com.android.library'
+
+android {
+    namespace 'com.yourehab.womenup'
+    compileSdk 33
+
+    defaultConfig {
+        minSdk 22
+        targetSdk 33
+        consumerProguardFiles "consumer-rules.pro"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+}
+
+dependencies {
+}
