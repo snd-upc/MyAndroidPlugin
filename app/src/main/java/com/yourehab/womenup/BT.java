@@ -1,303 +1,187 @@
-
 package com.yourehab.womenup;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.InputStream;
-
-import java.io.DataInputStream;
-//import java.io.BufferedInputStream;
-//import java.io.BufferedReader;
-//import java.io.InputStreamReader;
-
-import java.util.UUID;
-
-import java.util.Set;
-
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothClass;
-import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothSocket;
-
-import android.content.Intent;
+import android.bluetooth.*;
 import android.util.Log;
+import android.os.Handler;
+import android.os.Looper;
+import com.unity3d.player.UnityPlayer;
 
-import java.nio.charset.Charset;
-
-import android.os.ParcelUuid;
+import java.io.*;
+import java.util.*;
+import java.util.concurrent.*;
 import java.lang.reflect.Method;
-import java.util.UUID;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.DataInputStream;
-
-
-import 	java.lang.reflect.Method;
 
 public class BT {
-    String TAG="Unity";
-    int deviceNumber;
-    boolean BTOK;
-    boolean BTDeviceNameOK;
-    boolean BTDeviceOK;
-    private int REQUEST_ENABLE_BT = 1;
-    private BluetoothAdapter btAdapter = null;
-    private BluetoothSocket btSocket = null;
-    private OutputStream outStream = null;
-    private InputStream inStream = null;
-    String address = "00:00:00:00:00:00";
-    private String BTName="";
-    private int DEVICENUMBER;
-    final UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+    private static final String TAG = "UnityBT";
+    private final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
-    Set<BluetoothDevice> pairedDevices;
-    
+    private BluetoothAdapter btAdapter;
+    private BluetoothSocket btSocket;
+    private OutputStream outStream;
+    private InputStream inStream;
+    private DataInputStream mmInStream;
+    private boolean isConnected = false;
+
+    private ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    private String targetAddress;
+    private String unityReceiver = "VaginalBTDevice"; // name of Unity GameObject to send messages to
+
+    // ---- Initialization ----
     public String InitBT() {
-      btAdapter = BluetoothAdapter.getDefaultAdapter();
-      if (btAdapter == null) {
-          Log.d(TAG, "NO Bluetooth");
-          return "No Bluetooth";
-      }
-
-      if (!btAdapter.isEnabled()) {
-          Log.d(TAG, "Bluetooth disabled");
-          return "Bluetooth disabled";
-          //Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-          //startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
-      }else{
-          Log.d(TAG, "Bluetooth enabled");
-          BTOK=true;
-          return "Bluetooth enabled";
-      }
+        btAdapter = BluetoothAdapter.getDefaultAdapter();
+        if (btAdapter == null) return "No Bluetooth";
+        if (!btAdapter.isEnabled()) return "Bluetooth disabled";
+        return "Bluetooth enabled";
     }
+    public void SetUnityReceiver(String receiverName) {
+        Log.d(TAG, "Setunityreceiver: " + receiverName );
+        unityReceiver = receiverName;
 
-    //public void 
-  
-    public String GetPairedDevice(){
-        if(!BTOK) return "Bluetooth not initialized";
-        String returnValue="";
-        pairedDevices = btAdapter.getBondedDevices();
-        if (pairedDevices.size() > 0) {
-            Log.d(TAG, "PairedDevices count : " + pairedDevices.size());
-            for (BluetoothDevice device : pairedDevices) {
-                String deviceBTName = device.getName();
-                Log.d(TAG, "Paired device : "+deviceBTName);
-                //Log.d(TAG, "Address:"+device.getAddress());
-                returnValue+=deviceBTName+"#";
-            }
+    }
+    public String GetPairedDevice() {
+        Set<BluetoothDevice> devices = btAdapter.getBondedDevices();
+        if (devices == null || devices.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (BluetoothDevice d : devices) {
+            sb.append(d.getName()).append("#");
         }
-        if(returnValue.endsWith("#") )
-            returnValue = returnValue.substring(0, returnValue.length()-1); 
-        return returnValue;
+        if (sb.length() > 0) sb.setLength(sb.length() - 1);
+        return sb.toString();
     }
-    
-    public String InitBTDevice(String sBTName){
-        if(!BTOK) return "Bluetooth not initialized";
-        pairedDevices = btAdapter.getBondedDevices();
-        if (pairedDevices.size() > 0) {
-          Log.d(TAG, "PairedDevices count : " + pairedDevices.size());
-          for (BluetoothDevice device : pairedDevices) {
-              String deviceBTName = device.getName();
-              Log.d(TAG, "Paired device : "+deviceBTName);
-              //Log.d(TAG, "Address:"+device.getAddress());
 
-              if(deviceBTName.equals(sBTName)) {
-                  //deviceNumber++;
-                  //DEVICENUMBER=deviceNumber;
-                  address = device.getAddress();
-                  BTName=""+device.getName();
-                  Log.d(TAG, "Init device : "+BTName + " address:" + address);
-                  BTDeviceNameOK=true;
-                  return "OK";
-              }
-          }
+    public String InitBTDevice(String name) {
+        Set<BluetoothDevice> devices = btAdapter.getBondedDevices();
+        for (BluetoothDevice d : devices) {
+            if (d.getName().equals(name)) {
+                targetAddress = d.getAddress();
+                return "OK";
+            }
         }
         return "KO";
     }
-    // SND 11-11
-    public String StartBTCommunication() {
-        if (!BTDeviceNameOK) return "Device not initialized";
 
-        BluetoothDevice device = btAdapter.getRemoteDevice(address);
-        Log.d(TAG, "StartBTCommunication OK : " + BTName + " address:" + address);
-
-        // Cancel discovery antes de conectar
-        try { btAdapter.cancelDiscovery(); } catch (Exception e) { Log.w(TAG, "cancelDiscovery failed: " + e.getMessage()); }
-
-        // 1) Intentar obtener UUIDs vía SDP (puede necesitar permisos)
-        ParcelUuid[] uuids = null;
-        try {
-            device.fetchUuidsWithSdp();
-            // esperar un poco para que se rellenen
-            try { Thread.sleep(200); } catch (InterruptedException ignored) {}
-            uuids = device.getUuids();
-        } catch (Exception e) {
-            Log.w(TAG, "fetchUuidsWithSdp/getUuids exception: " + e.getMessage());
+    // ---- Connection (non-blocking) ----
+    public void StartBTCommunicationAsync() {
+        if (targetAddress == null) {
+            sendUnity("OnBTConnection", "Error: device not selected");
+            return;
         }
 
-        // Helper para cerrar socket en caso de fallo
-        java.util.function.Consumer<BluetoothSocket> safeClose = (sock) -> {
-            if (sock != null) {
-                try { sock.close(); } catch (IOException ignored) {}
-            }
-        };
+        executor.submit(() -> {
+            //sendUnity("OnBTConnection", "Connecting...");
 
-        // Intentar con cada UUID que el dispositivo anuncia
-        if (uuids != null) {
-            for (ParcelUuid pUuid : uuids) {
-                UUID uuid = pUuid.getUuid();
-                Log.d(TAG, "Probando UUID desde device.getUuids(): " + uuid.toString());
-                BluetoothSocket trialSocket = null;
-                try {
-                    trialSocket = device.createRfcommSocketToServiceRecord(uuid);
-                    trialSocket.connect();
-                    // si llegamos aquí: conectado
-                    btSocket = trialSocket;
-                    outStream = btSocket.getOutputStream();
-                    inStream = btSocket.getInputStream();
-                    mmInStream = new DataInputStream(inStream);
-                    Log.d(TAG, "Conexión establecida usando UUID device.getUuids(): " + uuid.toString());
-                    return "OK";
-                } catch (Exception e) {
-                    Log.w(TAG, "Fallo con UUID " + uuid.toString() + ": " + e.getMessage());
-                    safeClose.accept(trialSocket);
-                }
-            }
-        } else {
-            Log.d(TAG, "device.getUuids() devolvio null o no disponible");
-        }
-
-        // 2) Intentar con UUID SPP estándar
-        try {
-            UUID sppUUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
-            Log.d(TAG, "Probando UUID SPP estándar: " + sppUUID.toString());
-            BluetoothSocket sppSocket = device.createRfcommSocketToServiceRecord(sppUUID);
-            sppSocket.connect();
-            btSocket = sppSocket;
-            outStream = btSocket.getOutputStream();
-            inStream = btSocket.getInputStream();
-            mmInStream = new DataInputStream(inStream);
-            Log.d(TAG, "Conexión establecida con UUID SPP estándar");
-            return "OK";
-        } catch (Exception e) {
-            Log.w(TAG, "Fallo con UUID SPP estándar: " + e.getMessage());
-        }
-
-        // 3) Fallback: intentar crear socket RFCOMM por reflection (canal 1)
-        try {
-            Log.d(TAG, "Intentando reflection fallback (createRfcommSocket(int))");
-            Method m = device.getClass().getMethod("createRfcommSocket", new Class[]{int.class});
-            BluetoothSocket reflSocket = (BluetoothSocket) m.invoke(device, 1);
-            reflSocket.connect();
-            btSocket = reflSocket;
-            outStream = btSocket.getOutputStream();
-            inStream = btSocket.getInputStream();
-            mmInStream = new DataInputStream(inStream);
-            Log.d(TAG, "Conexión establecida con reflection fallback");
-            return "OK";
-        } catch (Exception e) {
-            Log.e(TAG, "Fallo con reflection fallback: " + e.getMessage());
-        }
-
-        // Si llegamos aquí, todo falló
-        Log.e(TAG, "StartBTCommunication terminated - no se pudo conectar");
-        return "Error01 Socket";
-    }
-
-  long start_time = System.nanoTime();
-  long inter_time1 = System.nanoTime();
-  long inter_time2 = System.nanoTime();
-  long inter_time3 = System.nanoTime();
-  long end_time = System.nanoTime();
-  DataInputStream mmInStream;
-  
-    public byte[] readData(boolean showMessage) {
-        start_time = System.nanoTime();
-        byte[] buffer = new byte[10000];  // buffer store for the stream
-        try {
-            //inter_time1 = System.nanoTime();
-            int bytesCount = mmInStream.available(); 
-            byte[] data = new byte[bytesCount];
-            //Log.d(TAG, "BT.Java;readData;BytesCount:"+bytesCount);
-            if(bytesCount>0){
-                mmInStream.read(buffer,0,bytesCount);
-                //inter_time2 = System.nanoTime();
-                System.arraycopy(buffer,0,data,0,bytesCount);
-                //inter_time3 = System.nanoTime();
-                if(showMessage){
-                    String readMessage = new String(buffer, 0, bytesCount);
-                    String readMessage2 = new String(buffer, Charset.forName("UTF8"));
-                    Log.d(TAG,"Message2:*"+readMessage2+"*");
-                    Log.d(TAG, "Message1:"+readMessage+"*");
-                }
-                //end_time = System.nanoTime();
-                //Log.d(TAG, "bytesCount :"+bytesCount+" total "+(end_time-start_time)/1e6 + " inter2:" +(inter_time2-inter_time1)/1e6 + " inter3:" +(inter_time3-inter_time2)/1e6);
-            }     
-            return data;
-        } catch (IOException e) {
-            Log.d(TAG,"readData IOException:"+e.getMessage());
-            byte[] myvar = "KO".getBytes();
-            return myvar;
-            // errorExit("Fatal Error", "In onResume() and socket create failed: " + e.getMessage() + ".");
-        }
-    }
-    
-    public void looptest() {
-        // buffer store for the stream
-        int bytesCount=0; // bytes returned from read()
-        for(int i=0;i<100000;i++){
-            byte[] buffer = new byte[10000];
-            start_time = System.nanoTime();
-            
+            BluetoothDevice device = btAdapter.getRemoteDevice(targetAddress);
             try {
-                bytesCount = inStream.available();
-                Log.d(TAG, "bytesCount:"+bytesCount);
-                if(bytesCount>1000){
-                    inStream.read(buffer,0,100);
-                }
-                //bytesCount = mmInStream.read(buffer,0,100);
-                //mmInStream.readFully(buffer, 0, 100);
-            } catch (IOException e) {
-                Log.d(TAG,"readData IOException:"+e.getMessage());
-            }                
-            inter_time1 = System.nanoTime();
-            //byte[] data = new byte[bytesCount];
-            //System.arraycopy(buffer,0,data,0,bytesCount);
-            end_time = System.nanoTime();
-            Log.d(TAG, "Size:"+bytesCount+" Time:"+(end_time-start_time)/1e6 + "us ReadBufferTime:" +(inter_time1-start_time)/1e6 +"us" );
-            try{
-                Thread.sleep(10);
-            }
-            catch (Exception e) {
-                Log.d(TAG,"readData Exception:"+e.getMessage());
-            }              
-        }
-    }    
+                btAdapter.cancelDiscovery();
 
-    public String sendData(String message) {
-        
-        byte[] msgBuffer = message.getBytes();
-        Log.d(TAG, "...Sending data: " + message + "...");
+                // Standard SPP connect (blocking)
+                btSocket = device.createRfcommSocketToServiceRecord(SPP_UUID);
+                btSocket.connect();
+
+                outStream = btSocket.getOutputStream();
+                inStream = btSocket.getInputStream();
+                mmInStream = new DataInputStream(inStream);
+                isConnected = true;
+
+                sendUnity("OnBTConnection", "Connected");
+                startReadLoop();
+
+            } catch (IOException e) {
+                safeClose();
+                sendUnity("OnBTConnection", "Error: " + e.getMessage());
+            }
+        });
+    }
+
+    // ---- Background Read Loop ----
+    private void startReadLoop() {
+        executor.submit(() -> {
+            byte[] buffer = new byte[1024];
+            while (isConnected) {
+                try {
+                    int count = mmInStream.available();
+                    if (count > 0) {
+                        int bytesRead = mmInStream.read(buffer, 0, count);
+                        byte[] data = Arrays.copyOf(buffer, bytesRead);
+                        String message = new String(data);
+                        sendUnity("OnBTData", message); // forward to Unity
+                    }
+                    Thread.sleep(20);
+                } catch (Exception e) {
+                    sendUnity("OnBTError", "Read error: " + e.getMessage());
+                    isConnected = false;
+                    safeClose();
+                }
+            }
+        });
+    }
+
+    // ---- Send Data ----
+    public String SendData(String msg) {
+        if (!isConnected || outStream == null) return "Not connected";
         try {
-            outStream.write(msgBuffer);
+            outStream.write(msg.getBytes());
             return "OK";
         } catch (IOException e) {
-            String msg = "In onResume() and an exception occurred during write: " + e.getMessage();
-            if (address.equals("00:00:00:00:00:00"))
-                msg = msg + ".\n\nUpdate your server address from 00:00:00:00:00:00";
-            msg = msg +  ".\n\nCheck that the SPP UUID: " + MY_UUID.toString() + " exists on server.\n\n";
-            Log.d(TAG, "sendData exception:"+msg);
-            return "KO";
-            //errorExit("Fatal Error", msg);
+            return "KO: " + e.getMessage();
         }
     }
-    
-    public void waitALittle(){
-        Log.d(TAG, "Wait");
+    // ---- Read Data ----
+    public byte[] readData(boolean debug) {
+        if (!isConnected || inStream == null) return new byte[0];
+
         try {
-            Thread.sleep(100);
-        } catch (Exception e) {
+            int available = inStream.available();
+            if (available > 0) {
+                byte[] buffer = new byte[available];
+                int bytesRead = inStream.read(buffer);
+                if (debug) Log.d(TAG, "ReadData: " + bytesRead + " bytes");
+                return Arrays.copyOf(buffer, bytesRead);
+            } else {
+                if (debug) Log.d(TAG, "No data available");
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "ReadData error: " + e.getMessage());
         }
-    }    
+        return new byte[0]; // ✅ always return non-null
+    }
+
+
+    // ---- Helpers ----
+    private void sendUnity(String method, String param) {
+        try {
+            UnityPlayer.UnitySendMessage(unityReceiver, method, param);
+        } catch (Exception e) {
+            Log.w(TAG, "UnitySendMessage failed: " + e.getMessage());
+        }
+    }
+
+    private void safeClose() {
+        try { if (btSocket != null) btSocket.close(); } catch (Exception ignored) {}
+        btSocket = null;
+        inStream = null;
+        outStream = null;
+        mmInStream = null;
+        isConnected = false;
+    }
+
+    public String StopBTCommunication() {
+        try {
+            // Stop connection loop
+            isConnected = false;
+
+            // Close everything safely
+            safeClose();
+
+            // Inform Unity
+            sendUnity("OnBTConnection", "Disconnected");
+
+            return "OK";
+        } catch (Exception e) {
+            Log.e(TAG, "StopBTCommunication error: " + e.getMessage());
+            return "Error: " + e.getMessage();
+        }
+    }
+
 }

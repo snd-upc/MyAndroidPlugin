@@ -66,7 +66,9 @@ public class AndroidPlugin
         //bt1.sendData("wbaom7\r");
         return returnValue;
     }
-    
+    public void SetUnityReceiver(String receiverName) {
+        if (bt1 != null) bt1.SetUnityReceiver(receiverName);
+    }
     public String GetPairedDevice(){
         String returnValue="";
         returnValue=bt1.GetPairedDevice();
@@ -79,28 +81,35 @@ public class AndroidPlugin
         return returnValue;
     }
     
-    public String StartBTCommunication(){
-        String returnValue="";
-        returnValue=bt1.StartBTCommunication();
-        return returnValue;
-    }
-   
-    public String SendData(String data){
-        String returnValue="";
-        returnValue=bt1.sendData(data);
-        return returnValue;
-    }
-    
+//    public String StartBTCommunication(){
+//        String returnValue="";
+//        returnValue=bt1.StartBTCommunicationAsync();
+//        return returnValue;
+//    }
+    public void StartBTCommunication() { bt1.StartBTCommunicationAsync(); }
+//    public String SendData(String data){
+//        String returnValue="";
+//        returnValue=bt1.sendData(data);
+//        return returnValue;
+//    }
+public String SendData(String data) { return bt1.SendData(data); }
+
     public byte[] ReadData(boolean debug){
         //Log.d(TAG,"Android ReadData");
         //byte[] tmp=new byte[300];
         byte[] tmp=bt1.readData(debug);
         return tmp;
     }
-    
-    
-    public void StartLoop(){
-        bt1.looptest();
+
+    public String StopBTCommunication() {
+        if (bt1 != null) {
+            return bt1.StopBTCommunication();
+        }
+        return "NoBTInstance";
     }
+
+//    public void StartLoop(){
+//        bt1.looptest();
+//    }
     
 }
