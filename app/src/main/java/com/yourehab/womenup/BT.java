@@ -95,10 +95,8 @@ public class BT {
                     this.btSocket.connect();
                     this.outStream = this.btSocket.getOutputStream();
                     this.inStream = this.btSocket.getInputStream();
-                    this.mmInStream = new DataInputStream(this.inStream);
                     this.isConnected = true;
                     this.sendUnity("OnBTConnection", "Connected");
-                    this.startReadLoop();
                 } catch (IOException var3) {
                     this.safeClose();
                     this.sendUnity("OnBTConnection", "Error: " + var3.getMessage());
@@ -108,30 +106,6 @@ public class BT {
         }
     }
 
-    private void startReadLoop() {
-        this.executor.submit(() -> {
-            byte[] buffer = new byte[1024];
-
-            while(this.isConnected) {
-                try {
-                    int count = this.mmInStream.available();
-                    if (count > 0) {
-                        int bytesRead = this.mmInStream.read(buffer, 0, count);
-                        byte[] data = Arrays.copyOf(buffer, bytesRead);
-                        String message = new String(data);
-                        this.sendUnity("OnBTData", message);
-                    }
-
-                    Thread.sleep(20L);
-                } catch (Exception var6) {
-                    this.sendUnity("OnBTError", "Read error: " + var6.getMessage());
-                    this.isConnected = false;
-                    this.safeClose();
-                }
-            }
-
-        });
-    }
 
     public String SendData(String msg) {
         if (this.isConnected && this.outStream != null) {
@@ -193,7 +167,6 @@ public class BT {
         this.btSocket = null;
         this.inStream = null;
         this.outStream = null;
-        this.mmInStream = null;
         this.isConnected = false;
     }
 
