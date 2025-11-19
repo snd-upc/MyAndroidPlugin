@@ -1,12 +1,13 @@
-//Vuelta a empezar - version base - compatible 18-11
 package com.yourehab.womenup;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
+import android.util.Base64;
 import android.util.Log;
+
 import com.unity3d.player.UnityPlayer;
-import java.io.DataInputStream;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -18,167 +19,190 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class BT {
+
     private static final String TAG = "UnityBT";
     private final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+
     private BluetoothAdapter btAdapter;
     private BluetoothSocket btSocket;
-    private OutputStream outStream;
     private InputStream inStream;
-    private DataInputStream mmInStream;
+    private OutputStream outStream;
+
     private boolean isConnected = false;
+    private String targetAddress = null;
+
     private ExecutorService executor = Executors.newSingleThreadExecutor();
-    private String targetAddress;
+
+    // Unity receiver GameObject
     private String unityReceiver = "VaginalBTDevice";
 
+    // ------------------------------------------------------------------------
+    // Initialization
+    // ------------------------------------------------------------------------
+
     public String InitBT() {
-        this.btAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (this.btAdapter == null) {
-            return "No Bluetooth";
-        } else {
-            return !this.btAdapter.isEnabled() ? "Bluetooth disabled" : "Bluetooth enabled";
-        }
+        btAdapter = BluetoothAdapter.getDefaultAdapter();
+
+        if (btAdapter == null) return "No Bluetooth";
+        if (!btAdapter.isEnabled()) return "Bluetooth disabled";
+
+        return "Bluetooth enabled";
     }
 
     public void SetUnityReceiver(String receiverName) {
-        Log.d("UnityBT", "Setunityreceiver: " + receiverName);
+        Log.d(TAG, "Receiver set to: " + receiverName);
         this.unityReceiver = receiverName;
     }
 
+    // ------------------------------------------------------------------------
+    // Get paired device list
+    // ------------------------------------------------------------------------
+
     public String GetPairedDevice() {
-        Set<BluetoothDevice> devices = this.btAdapter.getBondedDevices();
-        if (devices != null && !devices.isEmpty()) {
-            StringBuilder sb = new StringBuilder();
-            Iterator var3 = devices.iterator();
+        Set<BluetoothDevice> devices = btAdapter.getBondedDevices();
 
-            while(var3.hasNext()) {
-                BluetoothDevice d = (BluetoothDevice)var3.next();
-                sb.append(d.getName()).append("#");
+        if (devices == null || devices.isEmpty()) return "";
+
+        StringBuilder sb = new StringBuilder();
+        for (BluetoothDevice d : devices) {
+            sb.append(d.getName()).append("#");
+        }
+
+        if (sb.length() > 0) sb.setLength(sb.length() - 1);
+        return sb.toString();
+    }
+
+    // ------------------------------------------------------------------------
+    // Select device
+    // ------------------------------------------------------------------------
+
+    public String InitBTDevice(String name) {
+        Set<BluetoothDevice> devices = btAdapter.getBondedDevices();
+
+        for (BluetoothDevice d : devices) {
+            if (d.getName().equals(name)) {
+                targetAddress = d.getAddress();
+                return "OK";
             }
+        }
+        return "KO";
+    }
 
-            if (sb.length() > 0) {
-                sb.setLength(sb.length() - 1);
+    // ------------------------------------------------------------------------
+    // Start connection
+    // ------------------------------------------------------------------------
+
+    public void StartBTCommunicationAsync() {
+
+        if (targetAddress == null) {
+            sendUnity("OnBTConnection", "Error: device not selected");
+            return;
+        }
+
+        executor.submit(() -> {
+            try {
+                BluetoothDevice device = btAdapter.getRemoteDevice(targetAddress);
+
+                btAdapter.cancelDiscovery();
+                btSocket = device.createRfcommSocketToServiceRecord(SPP_UUID);
+
+                btSocket.connect(); // <-- BLOCKING CONNECT
+
+                outStream = btSocket.getOutputStream();
+                inStream = btSocket.getInputStream();
+
+                isConnected = true;
+
+                sendUnity("OnBTConnection", "Connected");
+
+                startReadLoop();
+
+            } catch (Exception e) {
+                safeClose();
+                sendUnity("OnBTConnection", "Error: " + e.getMessage());
             }
+        });
+    }
 
-            return sb.toString();
-        } else {
-            return "";
+    // ------------------------------------------------------------------------
+    // Read Loop (ONLY ONE READER)
+    // ------------------------------------------------------------------------
+
+    private void startReadLoop() {
+        executor.submit(() -> {
+
+            byte[] buffer = new byte[1024];
+
+            while (isConnected) {
+                try {
+                    // Blocking read()
+                    int bytesRead = inStream.read(buffer);
+
+                    if (bytesRead == -1) throw new IOException("Stream closed");
+
+                    if (bytesRead > 0) {
+                        byte[] realData = Arrays.copyOf(buffer, bytesRead);
+                        String base64 = Base64.encodeToString(realData, Base64.NO_WRAP);
+                        sendUnity("OnBTData", base64);
+                    }
+
+                } catch (IOException e) {
+                    // Device probably turned OFF, lost signal, etc.
+                    sendUnity("OnBTConnection", "Disconnected");
+                    safeClose();
+                }
+            }
+        });
+    }
+
+    // ------------------------------------------------------------------------
+    // Send Data
+    // ------------------------------------------------------------------------
+
+    public String SendData(String msg) {
+        if (!isConnected || outStream == null) return "Not connected";
+
+        try {
+            outStream.write(msg.getBytes());
+            return "OK";
+        } catch (IOException e) {
+            return "KO: " + e.getMessage();
         }
     }
 
-    public String InitBTDevice(String name) {
-        Set<BluetoothDevice> devices = this.btAdapter.getBondedDevices();
-        Iterator var3 = devices.iterator();
+    // ------------------------------------------------------------------------
+    // Safe Close
+    // ------------------------------------------------------------------------
 
-        BluetoothDevice d;
-        do {
-            if (!var3.hasNext()) {
-                return "KO";
-            }
+    private void safeClose() {
+        try { if (btSocket != null) btSocket.close(); } catch (Exception ignore) {}
 
-            d = (BluetoothDevice)var3.next();
-        } while(!d.getName().equals(name));
+        btSocket = null;
+        inStream = null;
+        outStream = null;
+        isConnected = false;
+    }
 
-        this.targetAddress = d.getAddress();
+    // ------------------------------------------------------------------------
+    // Stop Communication
+    // ------------------------------------------------------------------------
+
+    public String StopBTCommunication() {
+        isConnected = false;
+        safeClose();
+        sendUnity("OnBTConnection", "Disconnected");
         return "OK";
     }
 
-    public void StartBTCommunicationAsync() {
-        if (this.targetAddress == null) {
-            this.sendUnity("OnBTConnection", "Error: device not selected");
-        } else {
-            this.executor.submit(() -> {
-                BluetoothDevice device = this.btAdapter.getRemoteDevice(this.targetAddress);
-
-                try {
-                    this.btAdapter.cancelDiscovery();
-                    this.btSocket = device.createRfcommSocketToServiceRecord(this.SPP_UUID);
-                    this.btSocket.connect();
-                    this.outStream = this.btSocket.getOutputStream();
-                    this.inStream = this.btSocket.getInputStream();
-                    this.isConnected = true;
-                    this.sendUnity("OnBTConnection", "Connected");
-                } catch (IOException var3) {
-                    this.safeClose();
-                    this.sendUnity("OnBTConnection", "Error: " + var3.getMessage());
-                }
-
-            });
-        }
-    }
-
-
-    public String SendData(String msg) {
-        if (this.isConnected && this.outStream != null) {
-            try {
-                this.outStream.write(msg.getBytes());
-                return "OK";
-            } catch (IOException var3) {
-                return "KO: " + var3.getMessage();
-            }
-        } else {
-            return "Not connected";
-        }
-    }
-
-    public byte[] readData(boolean debug) {
-        if (this.isConnected && this.inStream != null) {
-            try {
-                int available = this.inStream.available();
-                if (available > 0) {
-                    byte[] buffer = new byte[available];
-                    int bytesRead = this.inStream.read(buffer);
-                    if (debug) {
-                        Log.d("UnityBT", "ReadData: " + bytesRead + " bytes");
-                    }
-
-                    return Arrays.copyOf(buffer, bytesRead);
-                }
-
-                if (debug) {
-                    Log.d("UnityBT", "No data available");
-                }
-            } catch (IOException var5) {
-                Log.e("UnityBT", "ReadData error: " + var5.getMessage());
-            }
-
-            return new byte[0];
-        } else {
-            return new byte[0];
-        }
-    }
+    // ------------------------------------------------------------------------
+    // Unity Message Helper
+    // ------------------------------------------------------------------------
 
     private void sendUnity(String method, String param) {
         try {
-            UnityPlayer.UnitySendMessage(this.unityReceiver, method, param);
-        } catch (Exception var4) {
-            Log.w("UnityBT", "UnitySendMessage failed: " + var4.getMessage());
-        }
-
-    }
-
-    private void safeClose() {
-        try {
-            if (this.btSocket != null) {
-                this.btSocket.close();
-            }
-        } catch (Exception var2) {
-        }
-
-        this.btSocket = null;
-        this.inStream = null;
-        this.outStream = null;
-        this.isConnected = false;
-    }
-
-    public String StopBTCommunication() {
-        try {
-            this.isConnected = false;
-            this.safeClose();
-            this.sendUnity("OnBTConnection", "Disconnected");
-            return "OK";
-        } catch (Exception var2) {
-            Log.e("UnityBT", "StopBTCommunication error: " + var2.getMessage());
-            return "Error: " + var2.getMessage();
+            UnityPlayer.UnitySendMessage(unityReceiver, method, param);
+        } catch (Exception e) {
+            Log.w(TAG, "UnitySendMessage failed: " + e.getMessage());
         }
     }
 }

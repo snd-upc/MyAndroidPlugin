@@ -1,104 +1,55 @@
 package com.yourehab.womenup;
 
-import android.os.Environment;
-import android.os.BatteryManager;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.Context;
 import android.util.Log;
 
-
-//import android.app.AlarmManager;
-
 public class AndroidPlugin
 {
-	// Needed to get the battery level.
-	private Context context;
-    int number=0;
-    String TAG="Unity";
-    BT bt1;
-    //BT bt2;
-    
-    //Alarm
-    //private static AlarmManager am;
-    
-    /*
-     public static void InitAlarm()
-    {
-        am=(AlarmManager)UnityPlayer.currentActivity.getSystemService(Context.ALARM_SERVICE);
-        Log.d(TAG, "InitAlarm");
-    }*/
-    
+    private static final String TAG = "Unity";
+    private Context context;
+
+    private BT bt1;
+
     public AndroidPlugin(Context context)
-	{
-		this.context = context;
-	}
-
-    /*
- public static void SenderEvent(int HOUR_OF_DAY,String statusMessage, String title, String content)
- {
-     Log.d(TAG, "Event Start");
-     Calendar cal = Calendar.getInstance();
-     cal.add(Calendar.SECOND, HOUR_OF_DAY);
-     Intent intent = new Intent(UnityPlayer.currentActivity, TimeAlarm.class);
-     intent.putExtra("alarm_status", statusMessage);
-     intent.putExtra("alarm_title", title);
-     intent.putExtra("alarm_content", content);
-     //Log.d(TAG, "przygotowane dane");
-     PendingIntent sender = PendingIntent.getBroadcast(context, REQUEST_CODE, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-     am.set(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), sender);
-     Log.d(TAG, "Event End");
- }    */
-    
-    /*******************************************************************************************/
-    /*                          BLUETOOTH                    */
-    /*******************************************************************************************/
-    
-    public String InitBT(){
-        String returnValue="";
-        Log.d(TAG,"ANDROID Init");
-        bt1=new BT();
-        returnValue=bt1.InitBT();
-        //String deviceName=bt1.GetPairedDevice();
-        //bt1.InitBTDevice(deviceName);
-        //bt1.StartBTCommunication();
-        //bt1.sendData("wbasds31110010\r");
-        //bt1.sendData("wbaom7\r");
-        return returnValue;
+    {
+        this.context = context;
     }
+
+    /*******************************************************************************************/
+    /*                          BLUETOOTH - CLEAN VERSION                                      */
+    /*******************************************************************************************/
+
+    public String InitBT() {
+        Log.d(TAG, "ANDROID InitBT");
+        bt1 = new BT();
+        return bt1.InitBT();
+    }
+
     public void SetUnityReceiver(String receiverName) {
-        if (bt1 != null) bt1.SetUnityReceiver(receiverName);
+        if (bt1 != null) {
+            bt1.SetUnityReceiver(receiverName);
+        }
     }
-    public String GetPairedDevice(){
-        String returnValue="";
-        returnValue=bt1.GetPairedDevice();
-        return returnValue;
-    }
-    
-    public String InitBTDevice(String deviceName){
-        String returnValue="";
-        returnValue = bt1.InitBTDevice(deviceName);
-        return returnValue;
-    }
-    
-//    public String StartBTCommunication(){
-//        String returnValue="";
-//        returnValue=bt1.StartBTCommunicationAsync();
-//        return returnValue;
-//    }
-    public void StartBTCommunication() { bt1.StartBTCommunicationAsync(); }
-//    public String SendData(String data){
-//        String returnValue="";
-//        returnValue=bt1.sendData(data);
-//        return returnValue;
-//    }
-public String SendData(String data) { return bt1.SendData(data); }
 
-    public byte[] ReadData(boolean debug){
-        //Log.d(TAG,"Android ReadData");
-        //byte[] tmp=new byte[300];
-        byte[] tmp=bt1.readData(debug);
-        return tmp;
+    public String GetPairedDevice() {
+        if (bt1 == null) return "";
+        return bt1.GetPairedDevice();
+    }
+
+    public String InitBTDevice(String deviceName) {
+        if (bt1 == null) return "NoBTInstance";
+        return bt1.InitBTDevice(deviceName);
+    }
+
+    public void StartBTCommunication() {
+        if (bt1 != null) {
+            bt1.StartBTCommunicationAsync();
+        }
+    }
+
+    public String SendData(String data) {
+        if (bt1 == null) return "NoBTInstance";
+        return bt1.SendData(data);
     }
 
     public String StopBTCommunication() {
@@ -107,9 +58,4 @@ public String SendData(String data) { return bt1.SendData(data); }
         }
         return "NoBTInstance";
     }
-
-//    public void StartLoop(){
-//        bt1.looptest();
-//    }
-    
 }
