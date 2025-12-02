@@ -14,7 +14,7 @@ public class NetworkManager extends BroadcastReceiver {
 
     private static final String TAG = "UnityConnectivity";
     // Objeto Unity que recibirá el mensaje. ¡Ajusta este nombre si es necesario!
-    private static final String UNITY_GAME_OBJECT = "NetworkManager";
+    private static final String UNITY_GAME_OBJECT = "AndroidManager";
     private static final String UNITY_METHOD = "OnConnectionStateChanged";
 
     // Método para registrar el receptor
