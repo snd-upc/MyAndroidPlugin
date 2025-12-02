@@ -10,6 +10,8 @@ public class AndroidPlugin
 
     private BT bt1;
 
+    private NetworkManager connectivityReceiver;
+
     public AndroidPlugin(Context context)
     {
         this.context = context;
@@ -57,5 +59,25 @@ public class AndroidPlugin
             return bt1.StopBTCommunication();
         }
         return "NoBTInstance";
+    }
+
+    //------------------------------------------------------------------------------------------
+    // NUEVO: Conectividad
+    //------------------------------------------------------------------------------------------
+
+    /**
+     * Unity llama a este método para iniciar la escucha de cambios de red.
+     */
+    public void StartConnectivityMonitor() {
+        Log.d(TAG, "ANDROID StartConnectivityMonitor");
+
+        if (connectivityReceiver == null) {
+            connectivityReceiver = new NetworkManager();
+            // ¡Usamos el Context ya inyectado para el registro!
+            connectivityReceiver.register(this.context);
+            Log.d(TAG, "Monitoreo de red iniciado y BroadcastReceiver registrado.");
+        } else {
+            Log.d(TAG, "Monitoreo de red ya estaba activo.");
+        }
     }
 }
