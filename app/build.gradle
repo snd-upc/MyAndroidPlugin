@@ -1,13 +1,19 @@
 apply plugin: 'com.android.library'
 
 android {
-    namespace 'com.yourehab.womenup'
+    namespace 'com.YouRehab.WomenUp'
     compileSdk 33
 
     defaultConfig {
         minSdk 22
         targetSdk 33
         consumerProguardFiles "consumer-rules.pro"
+    }
+
+    sourceSets {
+        main {
+            java.srcDirs = ['src/main/java']
+        }
     }
 
     buildTypes {
@@ -19,4 +25,9 @@ android {
 
 dependencies {
     compileOnly files('libs/classes.jar')
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.8.0"
+    implementation 'com.google.firebase:firebase-messaging:23.3.0'
+    implementation 'com.google.android.gms:play-services-base:18.2.0'
+
 }
+
