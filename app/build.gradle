@@ -24,10 +24,12 @@ android {
 }
 
 dependencies {
+    implementation libs.firebase.common
+    implementation libs.firebase.messaging
     compileOnly files('libs/classes.jar')
     implementation "org.jetbrains.kotlin:kotlin-stdlib:1.8.0"
-    implementation 'com.google.firebase:firebase-messaging:23.3.0'
-    implementation 'com.google.android.gms:play-services-base:18.2.0'
+//    implementation 'com.google.firebase:firebase-messaging:23.3.0'
+//    implementation 'com.google.android.gms:play-services-base:18.2.0'
 
 }
 

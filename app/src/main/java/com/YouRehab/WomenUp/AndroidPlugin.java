@@ -3,7 +3,6 @@ package com.YouRehab.WomenUp;
 import android.content.Context;
 import android.util.Log;
 
-import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.messaging.FirebaseMessaging;
