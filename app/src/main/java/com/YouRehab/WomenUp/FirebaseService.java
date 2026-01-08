@@ -6,6 +6,10 @@ import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
 import com.unity3d.player.UnityPlayer;
 
+import org.json.JSONObject;
+
+import java.util.Map;
+
 public class FirebaseService extends FirebaseMessagingService {
 
     private static final String TAG = "FCM";
@@ -29,23 +33,44 @@ public class FirebaseService extends FirebaseMessagingService {
     @Override
     public void onMessageReceived(RemoteMessage remoteMessage) {
 
-        Log.d(TAG, "SND FCM Message received");
+        Log.d(TAG, "[CustomPlugin SND] Message received");
 
-        String payload = "";
+        String title = "";
+        String body  = "";
 
-        if (remoteMessage.getNotification() != null) {
-            payload = remoteMessage.getNotification().getBody();
+        // 1️⃣ Prefer DATA payload (best for foreground)
+        if (!remoteMessage.getData().isEmpty()) {
+            Map<String, String> data = remoteMessage.getData();
+            title = data.get("title");
+            body  = data.get("body");
         }
-        else if (!remoteMessage.getData().isEmpty()) {
-            payload = remoteMessage.getData().toString();
+
+        // 2️⃣ Fallback to NOTIFICATION payload
+        if ((title == null || body == null) && remoteMessage.getNotification() != null) {
+            RemoteMessage.Notification notif = remoteMessage.getNotification();
+            title = notif.getTitle();
+            body  = notif.getBody();
         }
 
-        Log.d(TAG, "Payload: " + payload);
-
+        // 3️⃣ Build JSON manually (Unity-safe)
         try {
-            UnityPlayer.UnitySendMessage(UNITY_OBJECT, UNITY_METHOD_MESSAGE, payload);
+            JSONObject json = new JSONObject();
+            json.put("title", title != null ? title : "");
+            json.put("body", body != null ? body : "");
+
+            String payload = json.toString();
+
+            Log.d(TAG, "Sending to Unity: " + payload);
+
+            UnityPlayer.UnitySendMessage(
+                    UNITY_OBJECT,
+                    UNITY_METHOD_MESSAGE,
+                    payload
+            );
+
         } catch (Exception e) {
-            Log.w(TAG, "Unity not ready — message queued?");
+            Log.e(TAG, "Failed to send message to Unity", e);
         }
     }
+
 }

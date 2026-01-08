@@ -132,40 +132,19 @@ public class AndroidPlugin
     }
 
     //------------------------------------------------------------------------------------------
-    // TESTS DE FB
+    // Firebase Messaging
     //------------------------------------------------------------------------------------------
-    public void TestFB() {
-        // 1. Manually initialize Firebase before using any Firebase services
-        /*
-        if (FirebaseApp.getApps(context).isEmpty()) {
-            FirebaseApp.initializeApp(context);
-            Log.d("FCM", "Firebase manual initialization successful.");
-        }
+    public void StartFBMessaging() {
 
-        int status = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context);
-        Log.d("FCM", "Google Play Services status = " + status);
-*/
         if (FirebaseApp.getApps(context).isEmpty()) {
             FirebaseOptions options = new FirebaseOptions.Builder()
-                    .setApiKey("AIzaSyBGmnKWYIloEXPc4H4B6iYsiA9n1O9enRQ")       // From google-services.json -> current_key
-                    .setApplicationId("1:787090042834:android:57333acdee7a7f148ea20b")  // From google-services.json -> mobilesdk_app_id
-                    .setProjectId("womenup-b3331")  // From google-services.json -> project_id
+                    // From google-services.json
+                    .setApiKey("AIzaSyBGmnKWYIloEXPc4H4B6iYsiA9n1O9enRQ")
+                    .setApplicationId("1:787090042834:android:57333acdee7a7f148ea20b")
+                    .setProjectId("womenup-b3331")
                     .setGcmSenderId("787090042834")
                     .build();
 
             FirebaseApp.initializeApp(context, options);
         }
-        // Now it is safe to call FirebaseMessaging
-        FirebaseMessaging.getInstance().getToken()
-                .addOnCompleteListener(task -> {
-                    if (!task.isSuccessful()) {
-                        Log.w("FCM", "Fetching FCM token failed", task.getException());
-                        return;
-                    }
-
-                    String token = task.getResult();
-                    Log.d("FCM", "Manual token fetch: " + token);
-
-                    UnityPlayer.UnitySendMessage("AndroidManager", "OnFirebaseToken", token);
-                });
     }}
